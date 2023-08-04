@@ -1,5 +1,6 @@
-import { Application, Request, Response } from 'express'
+import { Application } from 'express'
 import * as fs from 'fs'
+import { ENV_CONFIG } from '../../config/env.config'
 
 interface RoutesDynamicsI {
   routeUrl: string
@@ -9,6 +10,8 @@ interface RoutesDynamicsI {
 export class RoutesDynamics {
   private readonly routesUrl: any[] = []
   private routesRead: RoutesDynamicsI[] = []
+  private _apiPrefix: string = ENV_CONFIG.API_PREFIX
+  private _apiVersion: string = ENV_CONFIG.API_VERSION
 
   constructor(private readonly app: Application) {
     this.routesUrl = fs.readdirSync(`${__dirname}/_routes`)
@@ -18,9 +21,7 @@ export class RoutesDynamics {
         const routeUrlReplaced = routeUrl.replace('.ts', '')
         const route = import(`${__dirname}/_routes/${routeUrl}`)
 
-        const routeClass = Promise.resolve(route).then((route) => {
-          return new route.default()
-        })
+        const routeClass = route.then((route: any) => route.default).then((route: any) => route)
 
         this.routesRead.push({
           routeUrl: routeUrlReplaced,
@@ -35,17 +36,16 @@ export class RoutesDynamics {
   }
 
   public readRoutes(): void {
-    console.log('AAA', this.routesRead)
     this.routesRead.forEach((route: any) => {
+      const routeExtracted = route.routeClass.then((route: any) => route)
 
+      const apiRoute = `/${this._apiPrefix}/${this._apiVersion}/${route.routeUrl}`
 
-      this.app.use(`/${route.routeUrl}`, (req: Request, res: Response) => {
-        res.header('Content-Type', 'application/json')
+      console.log(apiRoute)
 
-        res.json({ message: 'Hello World' })
-
+      this.app.use(`/${this._apiPrefix}/${this._apiVersion}/${route.routeUrl}`, (req, res) => {
+        routeExtracted.then((route: any) => route(req, res))
       })
-
     })
   }
 }
